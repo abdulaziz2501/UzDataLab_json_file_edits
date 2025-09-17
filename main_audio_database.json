@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "total_records": 6,
-    "last_updated": "2025-09-16T23:53:02.811745",
+    "total_records": 8,
+    "last_updated": "2025-09-17T20:14:08.047225",
     "version": "2.0",
     "duplicate_policy": "detect_and_mark"
   },
@@ -125,6 +125,54 @@
       "source_file": "20250912T134342_343b1c6d.json",
       "added_at": "2025-09-16T23:02:43.693113",
       "text_hash": "66aeaab9"
+    },
+    "20250912T124607_d9fafe5d_1": {
+      "utt_id": "20250912T124607_d9fafe5d_1",
+      "text": "Bugun havo juda yaxshi, sayrga chiqaylikmi?",
+      "duration_ms": 3080,
+      "speaker_id": 5022385772,
+      "created_at": "2025-09-12T12:46:07+00:00",
+      "sample_rate": 16000,
+      "bit_depth": "16-bit PCM",
+      "lang": "uz-UZ",
+      "gender": "male",
+      "device": "computer",
+      "region": "Qashqadaryo",
+      "sentiment": "positive",
+      "annotation": "Kundalik taklif, ijobiy kayfiyat.",
+      "category": "daily",
+      "is_potential_duplicate": true,
+      "similar_to": [
+        "20250912T124607_d9fafe5d"
+      ],
+      "max_similarity": 1.0,
+      "source_file": "20250912T124611_d9fafe5d.json",
+      "added_at": "2025-09-17T20:14:08.045924",
+      "text_hash": "4c45d73f"
+    },
+    "20250912T124632_fa67e4df_1": {
+      "utt_id": "20250912T124632_fa67e4df_1",
+      "text": "Samolyot chiptasi narxi oshib ketdi, afsus.",
+      "duration_ms": 3720,
+      "speaker_id": 5022385772,
+      "created_at": "2025-09-12T12:46:32+00:00",
+      "sample_rate": 16000,
+      "bit_depth": "16-bit PCM",
+      "lang": "uz-UZ",
+      "gender": "male",
+      "device": "computer",
+      "region": "Qashqadaryo",
+      "sentiment": "negative",
+      "annotation": "Sayohat xarajatlari haqida shikoyat.",
+      "category": "travel",
+      "is_potential_duplicate": true,
+      "similar_to": [
+        "20250912T124632_fa67e4df"
+      ],
+      "max_similarity": 1.0,
+      "source_file": "20250912T124612_fa67e4df.json",
+      "added_at": "2025-09-17T20:14:08.047201",
+      "text_hash": "deb5a1ee"
     }
   },
   "text_hashes": {
@@ -132,13 +180,15 @@
       "20250912T124701_7fe961d1"
     ],
     "deb5a1ee": [
-      "20250912T124632_fa67e4df"
+      "20250912T124632_fa67e4df",
+      "20250912T124632_fa67e4df_1"
     ],
     "ed4c7536": [
       "20250912T134506_b09de6d4"
     ],
     "4c45d73f": [
-      "20250912T124607_d9fafe5d"
+      "20250912T124607_d9fafe5d",
+      "20250912T124607_d9fafe5d_1"
     ],
     "7cd3270e": [
       "20250912T134443_c3bdac14"
