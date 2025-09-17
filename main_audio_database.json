@@ -1,30 +1,30 @@
 {
   "metadata": {
     "total_records": 8,
-    "last_updated": "2025-09-17T20:14:08.047225",
+    "last_updated": "2025-09-17T23:42:36.364455",
     "version": "2.0",
     "duplicate_policy": "detect_and_mark"
   },
   "records": {
-    "20250912T124701_7fe961d1": {
-      "utt_id": "20250912T124701_7fe961d1",
-      "text": "Ishda yangi loyiha boshlandi, qiziq bo'ladi.",
-      "duration_ms": 3780,
+    "20250912T124607_d9fafe5d": {
+      "utt_id": "20250912T124607_d9fafe5d",
+      "text": "Bugun havo juda yaxshi, sayrga chiqaylikmi?",
+      "duration_ms": 3080,
       "speaker_id": 5022385772,
-      "created_at": "2025-09-12T12:47:02+00:00",
+      "created_at": "2025-09-12T12:46:07+00:00",
       "sample_rate": 16000,
       "bit_depth": "16-bit PCM",
       "lang": "uz-UZ",
       "gender": "male",
-      "device": "phone",
+      "device": "computer",
       "region": "Qashqadaryo",
       "sentiment": "positive",
-      "annotation": "Ish jarayonidagi yangilik.",
-      "category": "work",
+      "annotation": "Kundalik taklif, ijobiy kayfiyat.",
+      "category": "daily",
       "is_potential_duplicate": false,
-      "source_file": "20250912T124701_7fe961d1.json",
-      "added_at": "2025-09-16T23:02:43.685689",
-      "text_hash": "8e67272b"
+      "source_file": "20250912T124607_d9fafe5d.json",
+      "added_at": "2025-09-17T23:37:52.054587",
+      "text_hash": "4c45d73f"
     },
     "20250912T124632_fa67e4df": {
       "utt_id": "20250912T124632_fa67e4df",
@@ -43,68 +43,28 @@
       "category": "travel",
       "is_potential_duplicate": false,
       "source_file": "20250912T124632_fa67e4df.json",
-      "added_at": "2025-09-16T23:02:43.687364",
+      "added_at": "2025-09-17T23:37:52.054867",
       "text_hash": "deb5a1ee"
     },
-    "20250912T134506_b09de6d4": {
-      "utt_id": "20250912T134506_b09de6d4",
-      "text": "Futbol o'yinida jamoamiz g'alaba qozondi!",
-      "duration_ms": 3014,
-      "speaker_id": 7246004112,
-      "created_at": "2025-09-12T13:45:06+00:00",
-      "sample_rate": 16000,
-      "bit_depth": "16-bit PCM",
-      "lang": "uz-UZ",
-      "gender": null,
-      "device": null,
-      "region": null,
-      "sentiment": "positive",
-      "annotation": "Sportdagi muvaffaqiyat haqida.",
-      "category": "sport",
-      "is_potential_duplicate": false,
-      "source_file": "20250912T134506_b09de6d4.json",
-      "added_at": "2025-09-16T23:02:43.688477",
-      "text_hash": "ed4c7536"
-    },
-    "20250912T124607_d9fafe5d": {
-      "utt_id": "20250912T124607_d9fafe5d",
-      "text": "Bugun havo juda yaxshi, sayrga chiqaylikmi?",
-      "duration_ms": 3080,
+    "20250912T124701_7fe961d1": {
+      "utt_id": "20250912T124701_7fe961d1",
+      "text": "Ishda yangi loyiha boshlandi, qiziq bo'ladi.",
+      "duration_ms": 3780,
       "speaker_id": 5022385772,
-      "created_at": "2025-09-12T12:46:07+00:00",
+      "created_at": "2025-09-12T12:47:02+00:00",
       "sample_rate": 16000,
       "bit_depth": "16-bit PCM",
       "lang": "uz-UZ",
       "gender": "male",
-      "device": "computer",
+      "device": "phone",
       "region": "Qashqadaryo",
       "sentiment": "positive",
-      "annotation": "Kundalik taklif, ijobiy kayfiyat.",
-      "category": "daily",
+      "annotation": "Ish jarayonidagi yangilik.",
+      "category": "work",
       "is_potential_duplicate": false,
-      "source_file": "20250912T124607_d9fafe5d.json",
-      "added_at": "2025-09-16T23:02:43.689865",
-      "text_hash": "4c45d73f"
-    },
-    "20250912T134443_c3bdac14": {
-      "utt_id": "20250912T134443_c3bdac14",
-      "text": "Milliy raqs festivali ajoyib o'tdi, hayronman!",
-      "duration_ms": 3654,
-      "speaker_id": 7246004112,
-      "created_at": "2025-09-12T13:44:43+00:00",
-      "sample_rate": 16000,
-      "bit_depth": "16-bit PCM",
-      "lang": "uz-UZ",
-      "gender": null,
-      "device": null,
-      "region": null,
-      "sentiment": "positive",
-      "annotation": "Madaniy tadbir haqida ijobiy fikr.",
-      "category": "culture",
-      "is_potential_duplicate": false,
-      "source_file": "20250912T134443_c3bdac14.json",
-      "added_at": "2025-09-16T23:02:43.691566",
-      "text_hash": "7cd3270e"
+      "source_file": "20250912T124701_7fe961d1.json",
+      "added_at": "2025-09-17T23:37:52.055246",
+      "text_hash": "8e67272b"
     },
     "20250912T134342_343b1c6d": {
       "utt_id": "20250912T134342_343b1c6d",
@@ -123,12 +83,52 @@
       "category": "education",
       "is_potential_duplicate": false,
       "source_file": "20250912T134342_343b1c6d.json",
-      "added_at": "2025-09-16T23:02:43.693113",
+      "added_at": "2025-09-17T23:37:52.055607",
       "text_hash": "66aeaab9"
+    },
+    "20250912T134443_c3bdac14": {
+      "utt_id": "20250912T134443_c3bdac14",
+      "text": "Milliy raqs festivali ajoyib o'tdi, hayronman!",
+      "duration_ms": 3654,
+      "speaker_id": 7246004112,
+      "created_at": "2025-09-12T13:44:43+00:00",
+      "sample_rate": 16000,
+      "bit_depth": "16-bit PCM",
+      "lang": "uz-UZ",
+      "gender": null,
+      "device": null,
+      "region": null,
+      "sentiment": "positive",
+      "annotation": "Madaniy tadbir haqida ijobiy fikr.",
+      "category": "culture",
+      "is_potential_duplicate": false,
+      "source_file": "20250912T134443_c3bdac14.json",
+      "added_at": "2025-09-17T23:37:52.055998",
+      "text_hash": "7cd3270e"
+    },
+    "20250912T134506_b09de6d4": {
+      "utt_id": "20250912T134506_b09de6d4",
+      "text": "Futbol o'yinida jamoamiz g'alaba qozondi!",
+      "duration_ms": 3014,
+      "speaker_id": 7246004112,
+      "created_at": "2025-09-12T13:45:06+00:00",
+      "sample_rate": 16000,
+      "bit_depth": "16-bit PCM",
+      "lang": "uz-UZ",
+      "gender": null,
+      "device": null,
+      "region": null,
+      "sentiment": "positive",
+      "annotation": "Sportdagi muvaffaqiyat haqida.",
+      "category": "sport",
+      "is_potential_duplicate": false,
+      "source_file": "20250912T134506_b09de6d4.json",
+      "added_at": "2025-09-17T23:37:52.056432",
+      "text_hash": "ed4c7536"
     },
     "20250912T124607_d9fafe5d_1": {
       "utt_id": "20250912T124607_d9fafe5d_1",
-      "text": "Bugun havo juda yaxshi, sayrga chiqaylikmi?",
+      "text": "Bugun havo juda yaxshi, chiqaylikmi?",
       "duration_ms": 3080,
       "speaker_id": 5022385772,
       "created_at": "2025-09-12T12:46:07+00:00",
@@ -145,14 +145,14 @@
       "similar_to": [
         "20250912T124607_d9fafe5d"
       ],
-      "max_similarity": 1.0,
+      "max_similarity": 0.9066666666666666,
       "source_file": "20250912T124611_d9fafe5d.json",
-      "added_at": "2025-09-17T20:14:08.045924",
-      "text_hash": "4c45d73f"
+      "added_at": "2025-09-17T23:42:36.363971",
+      "text_hash": "30cb40f1"
     },
     "20250912T124632_fa67e4df_1": {
       "utt_id": "20250912T124632_fa67e4df_1",
-      "text": "Samolyot chiptasi narxi oshib ketdi, afsus.",
+      "text": "Samolyot chiptasi narxi oshib ketdi.",
       "duration_ms": 3720,
       "speaker_id": 5022385772,
       "created_at": "2025-09-12T12:46:32+00:00",
@@ -169,32 +169,36 @@
       "similar_to": [
         "20250912T124632_fa67e4df"
       ],
-      "max_similarity": 1.0,
+      "max_similarity": 0.9210526315789473,
       "source_file": "20250912T124612_fa67e4df.json",
-      "added_at": "2025-09-17T20:14:08.047201",
-      "text_hash": "deb5a1ee"
+      "added_at": "2025-09-17T23:42:36.364446",
+      "text_hash": "0a349c0c"
     }
   },
   "text_hashes": {
+    "4c45d73f": [
+      "20250912T124607_d9fafe5d"
+    ],
+    "deb5a1ee": [
+      "20250912T124632_fa67e4df"
+    ],
     "8e67272b": [
       "20250912T124701_7fe961d1"
     ],
-    "deb5a1ee": [
-      "20250912T124632_fa67e4df",
-      "20250912T124632_fa67e4df_1"
-    ],
-    "ed4c7536": [
-      "20250912T134506_b09de6d4"
-    ],
-    "4c45d73f": [
-      "20250912T124607_d9fafe5d",
-      "20250912T124607_d9fafe5d_1"
+    "66aeaab9": [
+      "20250912T134342_343b1c6d"
     ],
     "7cd3270e": [
       "20250912T134443_c3bdac14"
     ],
-    "66aeaab9": [
-      "20250912T134342_343b1c6d"
+    "ed4c7536": [
+      "20250912T134506_b09de6d4"
+    ],
+    "30cb40f1": [
+      "20250912T124607_d9fafe5d_1"
+    ],
+    "0a349c0c": [
+      "20250912T124632_fa67e4df_1"
     ]
   }
 }
