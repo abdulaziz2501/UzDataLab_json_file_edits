@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "total_records": 7,
-    "last_updated": "2025-09-21T15:25:59.091026",
+    "total_records": 6,
+    "last_updated": "2025-09-22T01:46:52.275164",
     "version": "2.0",
     "duplicate_policy": "detect_and_mark"
   },
@@ -23,7 +23,7 @@
       "category": "daily",
       "is_potential_duplicate": false,
       "source_file": "20250912T124607_d9fafe5d.json",
-      "added_at": "2025-09-21T15:22:20.135854",
+      "added_at": "2025-09-22T01:46:52.264265",
       "text_hash": "4c45d73f"
     },
     "20250912T124632_fa67e4df": {
@@ -43,10 +43,10 @@
       "category": "travel",
       "is_potential_duplicate": false,
       "source_file": "20250912T124632_fa67e4df.json",
-      "added_at": "2025-09-21T15:22:20.138704",
+      "added_at": "2025-09-22T01:46:52.265828",
       "text_hash": "deb5a1ee",
       "last_recorded_at": "2025-09-12T12:46:32+00:00",
-      "updated_at": "2025-09-21T15:26:19.920343",
+      "updated_at": "2025-09-22T02:25:26.544875",
       "source_files": [
         "20250912T124612_fa67e4df.json"
       ]
@@ -68,7 +68,7 @@
       "category": "work",
       "is_potential_duplicate": false,
       "source_file": "20250912T124701_7fe961d1.json",
-      "added_at": "2025-09-21T15:22:20.140499",
+      "added_at": "2025-09-22T01:46:52.267749",
       "text_hash": "8e67272b"
     },
     "20250912T134342_343b1c6d": {
@@ -88,7 +88,7 @@
       "category": "education",
       "is_potential_duplicate": false,
       "source_file": "20250912T134342_343b1c6d.json",
-      "added_at": "2025-09-21T15:22:20.142220",
+      "added_at": "2025-09-22T01:46:52.269690",
       "text_hash": "66aeaab9"
     },
     "20250912T134443_c3bdac14": {
@@ -108,7 +108,7 @@
       "category": "culture",
       "is_potential_duplicate": false,
       "source_file": "20250912T134443_c3bdac14.json",
-      "added_at": "2025-09-21T15:22:20.144441",
+      "added_at": "2025-09-22T01:46:52.272223",
       "text_hash": "7cd3270e"
     },
     "20250912T134506_b09de6d4": {
@@ -128,38 +128,13 @@
       "category": "sport",
       "is_potential_duplicate": false,
       "source_file": "20250912T134506_b09de6d4.json",
-      "added_at": "2025-09-21T15:22:20.147607",
+      "added_at": "2025-09-22T01:46:52.275111",
       "text_hash": "ed4c7536"
-    },
-    "20250912T124607_d9fafe5d_1": {
-      "utt_id": "20250912T124607_d9fafe5d_1",
-      "text": "Bugun havo juda yaxshi, sayrga chiqaylikmi?",
-      "duration_ms": 3080,
-      "speaker_id": 5022385772,
-      "created_at": "2025-09-12T12:46:07+00:00",
-      "sample_rate": 16000,
-      "bit_depth": "16-bit PCM",
-      "lang": "uz-UZ",
-      "gender": "male",
-      "device": "computer",
-      "region": "Qashqadaryo",
-      "sentiment": "positive",
-      "annotation": "Kundalik taklif, ijobiy kayfiyat.",
-      "category": "daily",
-      "is_potential_duplicate": true,
-      "similar_to": [
-        "20250912T124607_d9fafe5d"
-      ],
-      "max_similarity": 1.0,
-      "source_file": "20250912T124611_d9fafe5d.json",
-      "added_at": "2025-09-21T15:25:59.090993",
-      "text_hash": "4c45d73f"
     }
   },
   "text_hashes": {
     "4c45d73f": [
-      "20250912T124607_d9fafe5d",
-      "20250912T124607_d9fafe5d_1"
+      "20250912T124607_d9fafe5d"
     ],
     "deb5a1ee": [
       "20250912T124632_fa67e4df"

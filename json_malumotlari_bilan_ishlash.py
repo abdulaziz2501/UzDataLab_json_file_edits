@@ -7,6 +7,8 @@ from typing import Dict, List, Any, Tuple
 from difflib import SequenceMatcher
 import re
 import pandas as pd
+import shutil
+from pathlib import Path
 
 
 class SmartAudioDataManager:
@@ -19,6 +21,610 @@ class SmartAudioDataManager:
         self.main_db_path = main_db_path
         self.similarity_threshold = similarity_threshold
         self.main_database = self.load_main_database()
+
+    def add_record_streamlit(self, new_record: dict, filename: str,
+                             action_on_duplicate: str = "ask", folder_path: str = None) -> Dict[str, Any]:
+        """Streamlit uchun record qo'shish (folder_path qo'shildi)"""
+        try:
+            new_text = new_record.get("text", "")
+
+            if not new_text:
+                return {"status": "error", "message": "Matn topilmadi"}
+
+            similar_records = self.find_similar_records(new_text)
+
+            result = {
+                "status": "unknown",
+                "filename": filename,
+                "folder_path": folder_path,  # Papka yo'lini qo'shish
+                "new_text": new_text,
+                "similar_count": len(similar_records),
+                "similar_records": similar_records[:3]
+            }
+
+            if similar_records:
+                best_match = similar_records[0]
+                similarity_percent = int(best_match[2] * 100)
+
+                result["best_match"] = {
+                    "id": best_match[0],
+                    "text": best_match[1].get("text", ""),
+                    "similarity": similarity_percent,
+                    "speaker_id": best_match[1].get("speaker_id"),
+                    "created_at": best_match[1].get("created_at")
+                }
+
+                if action_on_duplicate == "skip":
+                    result["status"] = "skipped"
+                    result["message"] = "Takroriy matn, o'tkazib yuborildi"
+                    return result
+
+                elif action_on_duplicate == "update_existing":
+                    existing_id = best_match[0]
+                    existing_record = self.main_database["records"][existing_id]
+
+                    if "duration_ms" in new_record:
+                        existing_record["duration_ms"] = new_record["duration_ms"]
+                    if "created_at" in new_record:
+                        existing_record["last_recorded_at"] = new_record["created_at"]
+
+                    existing_record["updated_at"] = datetime.now().isoformat()
+                    existing_record["source_files"] = existing_record.get("source_files", []) + [filename]
+
+                    result["status"] = "updated"
+                    result["message"] = f"Mavjud record yangilandi: {existing_id}"
+                    result["updated_id"] = existing_id
+                    return result
+
+            # Yangi record qo'shish
+            unique_id = self.generate_unique_id(new_record, filename)
+
+            if similar_records:
+                new_record["is_potential_duplicate"] = True
+                new_record["similar_to"] = [r[0] for r in similar_records[:3]]
+                new_record["max_similarity"] = similar_records[0][2]
+            else:
+                new_record["is_potential_duplicate"] = False
+
+            new_record["utt_id"] = unique_id
+            new_record["source_file"] = filename
+            new_record["source_folder"] = folder_path  # Papka yo'lini saqlash
+            new_record["added_at"] = datetime.now().isoformat()
+            new_record["text_hash"] = self.create_text_hash(new_text)
+
+            self.main_database["records"][unique_id] = new_record
+            self.main_database["metadata"]["total_records"] += 1
+            self.main_database["metadata"]["last_updated"] = datetime.now().isoformat()
+
+            text_hash = new_record["text_hash"]
+            if text_hash not in self.main_database["text_hashes"]:
+                self.main_database["text_hashes"][text_hash] = []
+            self.main_database["text_hashes"][text_hash].append(unique_id)
+
+            result["status"] = "added"
+            result["message"] = f"Yangi record qo'shildi: {unique_id}"
+            result["new_id"] = unique_id
+
+            return result
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Xatolik: {str(e)}",
+                "filename": filename,
+                "folder_path": folder_path
+            }
+
+    def process_folder_files(self, folder_path: str, action_on_duplicate: str = "skip") -> Dict[str, Any]:
+        """
+        Butun papkadagi JSON fayllarni qayta ishlash
+        """
+        try:
+            if not os.path.exists(folder_path):
+                return {"status": "error", "message": f"Papka topilmadi: {folder_path}"}
+
+            results = {
+                "status": "success",
+                "folder_path": folder_path,
+                "total_files": 0,
+                "processed_files": 0,
+                "added": 0,
+                "updated": 0,
+                "skipped": 0,
+                "errors": 0,
+                "details": []
+            }
+
+            # Papkadagi JSON fayllarni topish
+            json_files = []
+            for file in os.listdir(folder_path):
+                if file.lower().endswith('.json'):
+                    json_files.append(file)
+
+            results["total_files"] = len(json_files)
+
+            if not json_files:
+                return {
+                    "status": "warning",
+                    "message": f"Papkada JSON fayllar topilmadi: {folder_path}"
+                }
+
+            # Har bir JSON faylni qayta ishlash
+            for json_file in json_files:
+                file_path = os.path.join(folder_path, json_file)
+
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        file_content = json.load(f)
+
+                    # Folder yo'lini relative qilish
+                    relative_folder = os.path.relpath(folder_path, os.getcwd())
+
+                    result = self.add_record_streamlit(
+                        file_content,
+                        json_file,
+                        action_on_duplicate,
+                        folder_path=relative_folder
+                    )
+
+                    results["details"].append(result)
+                    results[result["status"]] += 1
+                    results["processed_files"] += 1
+
+                except json.JSONDecodeError:
+                    error_result = {
+                        "status": "error",
+                        "filename": json_file,
+                        "folder_path": relative_folder,
+                        "message": "JSON format xatosi"
+                    }
+                    results["details"].append(error_result)
+                    results["errors"] += 1
+
+                except Exception as e:
+                    error_result = {
+                        "status": "error",
+                        "filename": json_file,
+                        "folder_path": relative_folder,
+                        "message": f"Xatolik: {str(e)}"
+                    }
+                    results["details"].append(error_result)
+                    results["errors"] += 1
+
+            return results
+
+        except Exception as e:
+            return {"status": "error", "message": f"Papka qayta ishlashda xatolik: {str(e)}"}
+
+    def get_records_by_folder(self, folder_path: str = None) -> Dict[str, List[Dict]]:
+        """
+        Papka bo'yicha recordlarni guruhlash
+        """
+        folder_groups = {}
+
+        for record_id, record in self.main_database["records"].items():
+            record_folder = record.get("source_folder", "unknown")
+
+            if folder_path and record_folder != folder_path:
+                continue
+
+            if record_folder not in folder_groups:
+                folder_groups[record_folder] = []
+
+            folder_groups[record_folder].append({
+                "record_id": record_id,
+                "filename": record.get("source_file", ""),
+                "text_preview": record.get("text", "")[:50] + "..." if len(record.get("text", "")) > 50 else record.get(
+                    "text", ""),
+                "speaker_id": record.get("speaker_id"),
+                "category": record.get("category"),
+                "added_at": record.get("added_at")
+            })
+
+        return folder_groups
+
+    def find_and_collect_unique_audio_files_smart(self, destination_folder: str,
+                                                  file_extension: str = ".wav") -> Dict[str, Any]:
+        """
+        Aqlli usul bilan noyob audio fayllarni yig'ish - har bir record uchun source_folder dan qidirish
+        """
+        try:
+            # Destination papkani yaratish
+            os.makedirs(destination_folder, exist_ok=True)
+
+            results = {
+                "status": "success",
+                "total_unique_texts": 0,
+                "audio_files_found": 0,
+                "audio_files_copied": 0,
+                "missing_audio_files": [],
+                "copied_files": [],
+                "errors": [],
+                "folders_processed": set()
+            }
+
+            # Noyob matnlarni topish
+            unique_texts = self.find_unique_texts()
+            results["total_unique_texts"] = len(unique_texts)
+
+            if not unique_texts:
+                return {"status": "warning", "message": "Hech qanday noyob matn topilmadi"}
+
+            # Har bir noyob matn uchun
+            for text_hash, record_ids in unique_texts.items():
+                main_record_id = record_ids[0]
+                record = self.main_database["records"].get(main_record_id)
+
+                if not record:
+                    continue
+
+                # Source folder va filename olish
+                source_folder = record.get("source_folder", "")
+                source_filename = record.get("source_file", "")
+
+                if not source_folder or not source_filename:
+                    # Eski usul bilan ID dan fayl nomi yaratish
+                    source_filename = f"{main_record_id}.json"
+                    # Available folderlardan qidirish
+                    available_folders = self.get_available_source_folders()
+                    found_in_folder = None
+
+                    for folder in available_folders:
+                        test_path = os.path.join(folder, source_filename.replace('.json', file_extension))
+                        if os.path.exists(test_path):
+                            found_in_folder = folder
+                            break
+
+                    if found_in_folder:
+                        source_folder = found_in_folder
+                    else:
+                        source_folder = "unknown"
+
+                results["folders_processed"].add(source_folder)
+
+                # Audio fayl nomini yaratish
+                audio_filename = source_filename.replace(".json", file_extension)
+
+                # Source va destination yo'llar
+                if source_folder == "unknown":
+                    # Barcha available folderlardan qidirish
+                    found = False
+                    for folder in self.get_available_source_folders():
+                        source_audio_path = os.path.join(folder, audio_filename)
+                        if os.path.exists(source_audio_path):
+                            destination_audio_path = os.path.join(destination_folder, audio_filename)
+
+                            try:
+                                shutil.copy2(source_audio_path, destination_audio_path)
+                                results["audio_files_found"] += 1
+                                results["audio_files_copied"] += 1
+                                results["copied_files"].append({
+                                    "audio_file": audio_filename,
+                                    "record_id": main_record_id,
+                                    "text_preview": record.get("text", "")[:50] + "..." if len(
+                                        record.get("text", "")) > 50 else record.get("text", ""),
+                                    "source_path": source_audio_path,
+                                    "destination_path": destination_audio_path,
+                                    "source_folder": folder
+                                })
+                                found = True
+                                break
+                            except Exception as e:
+                                results["errors"].append({
+                                    "audio_file": audio_filename,
+                                    "error": f"Nusxalash xatosi: {str(e)}"
+                                })
+
+                    if not found:
+                        results["missing_audio_files"].append({
+                            "expected_audio_file": audio_filename,
+                            "record_id": main_record_id,
+                            "text_preview": record.get("text", "")[:50] + "..." if len(
+                                record.get("text", "")) > 50 else record.get("text", ""),
+                            "searched_folders": self.get_available_source_folders()
+                        })
+
+                else:
+                    # Ma'lum source folder dan qidirish
+                    source_audio_path = os.path.join(source_folder, audio_filename)
+                    destination_audio_path = os.path.join(destination_folder, audio_filename)
+
+                    if os.path.exists(source_audio_path):
+                        results["audio_files_found"] += 1
+
+                        try:
+                            shutil.copy2(source_audio_path, destination_audio_path)
+                            results["audio_files_copied"] += 1
+                            results["copied_files"].append({
+                                "audio_file": audio_filename,
+                                "record_id": main_record_id,
+                                "text_preview": record.get("text", "")[:50] + "..." if len(
+                                    record.get("text", "")) > 50 else record.get("text", ""),
+                                "source_path": source_audio_path,
+                                "destination_path": destination_audio_path,
+                                "source_folder": source_folder
+                            })
+                        except Exception as e:
+                            results["errors"].append({
+                                "audio_file": audio_filename,
+                                "error": f"Nusxalash xatosi: {str(e)}"
+                            })
+                    else:
+                        results["missing_audio_files"].append({
+                            "expected_audio_file": audio_filename,
+                            "record_id": main_record_id,
+                            "text_preview": record.get("text", "")[:50] + "..." if len(
+                                record.get("text", "")) > 50 else record.get("text", ""),
+                            "expected_source_path": source_audio_path,
+                            "source_folder": source_folder
+                        })
+
+            results["folders_processed"] = list(results["folders_processed"])
+            return results
+
+        except Exception as e:
+            return {"status": "error", "message": f"Umumiy xatolik: {str(e)}"}
+
+
+    def find_and_collect_unique_audio_files(self, source_folder: str, destination_folder: str,
+                                            file_extension: str = ".wav") -> Dict[str, Any]:
+        """
+        Noyob matnli JSON fayllar uchun mos audio fayllarni topish va yangi papkaga nusxalash
+        """
+        try:
+            if not os.path.exists(source_folder):
+                return {"status": "error", "message": f"Manba papka topilmadi: {source_folder}"}
+
+            # Destination papkani yaratish
+            os.makedirs(destination_folder, exist_ok=True)
+
+            results = {
+                "status": "success",
+                "total_unique_texts": 0,
+                "audio_files_found": 0,
+                "audio_files_copied": 0,
+                "missing_audio_files": [],
+                "copied_files": [],
+                "errors": []
+            }
+
+            # Noyob matnlarni topish
+            unique_texts = self.find_unique_texts()
+            results["total_unique_texts"] = len(unique_texts)
+
+            if not unique_texts:
+                return {"status": "warning", "message": "Hech qanday noyob matn topilmadi"}
+
+            # Har bir noyob matn uchun audio fayl qidirish
+            for text_hash, record_ids in unique_texts.items():
+                # Birinchi record_id ni olish (noyob matn uchun)
+                main_record_id = record_ids[0]
+                record = self.main_database["records"].get(main_record_id)
+
+                if not record:
+                    continue
+
+                # JSON fayl nomidan audio fayl nomini hosil qilish
+                source_file_name = record.get("source_file", "")
+                if not source_file_name:
+                    # utt_id dan audio fayl nomini yaratish
+                    source_file_name = f"{main_record_id}.json"
+
+                # Audio fayl nomini yaratish (.json ni .wav ga almashtirish)
+                audio_file_name = source_file_name.replace(".json", file_extension)
+                source_audio_path = os.path.join(source_folder, audio_file_name)
+                destination_audio_path = os.path.join(destination_folder, audio_file_name)
+
+                # Audio fayl mavjudligini tekshirish
+                if os.path.exists(source_audio_path):
+                    results["audio_files_found"] += 1
+
+                    try:
+                        # Audio faylni nusxalash
+                        shutil.copy2(source_audio_path, destination_audio_path)
+                        results["audio_files_copied"] += 1
+                        results["copied_files"].append({
+                            "audio_file": audio_file_name,
+                            "record_id": main_record_id,
+                            "text_preview": record.get("text", "")[:50] + "..." if len(
+                                record.get("text", "")) > 50 else record.get("text", ""),
+                            "source_path": source_audio_path,
+                            "destination_path": destination_audio_path
+                        })
+                    except Exception as e:
+                        results["errors"].append({
+                            "audio_file": audio_file_name,
+                            "error": f"Nusxalash xatosi: {str(e)}"
+                        })
+                else:
+                    results["missing_audio_files"].append({
+                        "expected_audio_file": audio_file_name,
+                        "record_id": main_record_id,
+                        "text_preview": record.get("text", "")[:50] + "..." if len(
+                            record.get("text", "")) > 50 else record.get("text", "")
+                    })
+
+            return results
+
+        except Exception as e:
+            return {"status": "error", "message": f"Umumiy xatolik: {str(e)}"}
+
+    def get_available_source_folders(self) -> List[str]:
+        """
+        Loyihadagi mavjud papkalarni topish
+        """
+        available_folders = []
+        current_dir = os.getcwd()
+
+        # Loyiha ildiz papkasidagi barcha papkalarni tekshirish
+        try:
+            for item in os.listdir(current_dir):
+                item_path = os.path.join(current_dir, item)
+                if os.path.isdir(item_path) and not item.startswith('.'):
+                    # JSON va audio fayllar borligini tekshirish
+                    has_json = False
+                    has_audio = False
+
+                    try:
+                        for file in os.listdir(item_path):
+                            if file.endswith('.json'):
+                                has_json = True
+                            if file.endswith(('.wav', '.mp3', '.m4a', '.flac')):
+                                has_audio = True
+                    except PermissionError:
+                        continue
+
+                    if has_json or has_audio:
+                        available_folders.append(item)
+
+        except Exception as e:
+            st.error(f"Papkalarni o'qishda xatolik: {str(e)}")
+
+        return sorted(available_folders)
+
+    def auto_create_destination_folder(self, base_name: str = "noyob_audio_fayllar") -> str:
+        """
+        Noyob papka nomi yaratish (agar mavjud bo'lsa raqam qo'shish)
+        """
+        counter = 1
+        original_name = base_name
+
+        while os.path.exists(base_name):
+            base_name = f"{original_name}_{counter}"
+            counter += 1
+
+        return base_name
+
+    def scan_folder_contents(self, folder_path: str) -> Dict[str, Any]:
+        """
+        Papka tarkibini skanerlash va statistika berish
+        """
+        try:
+            if not os.path.exists(folder_path):
+                return {"status": "error", "message": "Papka topilmadi"}
+
+            contents = {
+                "json_files": [],
+                "audio_files": [],
+                "other_files": [],
+                "total_files": 0,
+                "json_count": 0,
+                "audio_count": 0,
+                "folder_size_bytes": 0
+            }
+
+            audio_extensions = ['.wav', '.mp3', '.m4a', '.flac', '.ogg']
+
+            for file in os.listdir(folder_path):
+                file_path = os.path.join(folder_path, file)
+
+                if os.path.isfile(file_path):
+                    file_size = os.path.getsize(file_path)
+                    contents["folder_size_bytes"] += file_size
+                    contents["total_files"] += 1
+
+                    file_lower = file.lower()
+
+                    if file_lower.endswith('.json'):
+                        contents["json_files"].append({
+                            "name": file,
+                            "size_bytes": file_size,
+                            "size_kb": round(file_size / 1024, 2)
+                        })
+                        contents["json_count"] += 1
+
+                    elif any(file_lower.endswith(ext) for ext in audio_extensions):
+                        contents["audio_files"].append({
+                            "name": file,
+                            "size_bytes": file_size,
+                            "size_mb": round(file_size / (1024 * 1024), 2)
+                        })
+                        contents["audio_count"] += 1
+
+                    else:
+                        contents["other_files"].append(file)
+
+            contents["folder_size_mb"] = round(contents["folder_size_bytes"] / (1024 * 1024), 2)
+            contents["status"] = "success"
+
+            return contents
+
+        except Exception as e:
+            return {"status": "error", "message": f"Xatolik: {str(e)}"}
+
+    def find_unique_texts(self) -> Dict[str, List[str]]:
+        """
+        Faqat noyob (takrorlanmaydigan) matnlarni topish
+        """
+        text_groups = {}
+
+        # Barcha matnlarni guruhlab chiqish
+        for record_id, record in self.main_database["records"].items():
+            text = record.get("text", "")
+            if text:
+                text_hash = self.create_text_hash(text)
+                if text_hash not in text_groups:
+                    text_groups[text_hash] = []
+                text_groups[text_hash].append(record_id)
+
+        # Faqat noyob (1 marta uchraydigan) matnlarni qaytarish
+        unique_texts = {text_hash: ids for text_hash, ids in text_groups.items() if len(ids) == 1}
+        return unique_texts
+
+    def get_unique_texts_info(self) -> Dict[str, Any]:
+        """
+        Noyob matnlar haqida statistik ma'lumot
+        """
+        unique_texts = self.find_unique_texts()
+
+        info = {
+            "total_unique_texts": len(unique_texts),
+            "unique_records": [],
+            "total_size_bytes": 0,
+            "categories": {},
+            "speakers": {},
+            "languages": set()
+        }
+
+        for text_hash, record_ids in unique_texts.items():
+            record_id = record_ids[0]  # Noyob matn uchun faqat 1 ta record
+            record = self.main_database["records"].get(record_id)
+
+            if record:
+                # Hajmni hisoblash
+                record_json = json.dumps(record, ensure_ascii=False)
+                record_size = len(record_json.encode('utf-8'))
+                info["total_size_bytes"] += record_size
+
+                # Kategoriya
+                category = record.get("category", "unknown")
+                info["categories"][category] = info["categories"].get(category, 0) + 1
+
+                # Speaker
+                speaker = record.get("speaker_id", "unknown")
+                info["speakers"][speaker] = info["speakers"].get(speaker, 0) + 1
+
+                # Til
+                lang = record.get("lang")
+                if lang:
+                    info["languages"].add(lang)
+
+                # Record ma'lumotini qo'shish
+                info["unique_records"].append({
+                    "record_id": record_id,
+                    "text_preview": record.get("text", "")[:100] + "..." if len(
+                        record.get("text", "")) > 100 else record.get("text", ""),
+                    "speaker_id": record.get("speaker_id"),
+                    "category": record.get("category"),
+                    "source_file": record.get("source_file"),
+                    "size_bytes": record_size
+                })
+
+        info["languages"] = list(info["languages"])
+        info["total_size_kb"] = round(info["total_size_bytes"] / 1024, 2)
+        info["total_size_mb"] = round(info["total_size_bytes"] / (1024 * 1024), 2)
+
+        return info
 
     def clean_text(self, text: str) -> str:
         """Matnni taqqoslash uchun tozalash"""
@@ -508,169 +1114,6 @@ def main():
                 del st.session_state.manager
             st.rerun()
 
-    # # Manager obyektini yaratish
-    # if 'manager' not in st.session_state or st.session_state.manager.similarity_threshold != similarity_threshold:
-    #     st.session_state.manager = SmartAudioDataManager(
-    #         main_db_path=db_file,
-    #         similarity_threshold=similarity_threshold
-    #     )
-    #
-    # manager = st.session_state.manager
-    #
-    # # Reset uploaded files after processing
-    # if 'files_processed' not in st.session_state:
-    #     st.session_state.files_processed = False
-    #
-    # # Tab'larni yaratish
-    # tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    #     "📁 Fayl Qo'shish",
-    #     "📊 Umumiy Statistika",
-    #     "👥 Speaker Statistika",
-    #     "🔍 Takrorlar",
-    #     "💾 Ma'lumotlar"
-    # ])
-    #
-    # with tab1:
-    #     st.header("Yangi Fayl Qo'shish")
-    #
-    #     col1, col2 = st.columns([1, 1])
-    #
-    #     with col1:
-    #         st.subheader("Bitta Fayl")
-    #         uploaded_file = st.file_uploader(
-    #             "JSON fayl yuklang",
-    #             type=['json'],
-    #             key="single_file"
-    #         )
-    #
-    #         if uploaded_file:
-    #             try:
-    #                 file_content = json.loads(uploaded_file.read())
-    #
-    #                 with st.expander("Fayl tarkibi"):
-    #                     st.json(file_content)
-    #
-    #                 duplicate_action = st.selectbox(
-    #                     "Takroriy fayllar uchun harakat",
-    #                     ["add_anyway", "skip", "update_existing"],
-    #                     format_func=lambda x: {
-    #                         "add_anyway": "Qo'shish",
-    #                         "skip": "O'tkazish",
-    #                         "update_existing": "Yangilash"
-    #                     }[x]
-    #                 )
-    #
-    #                 if st.button("Faylni Qo'shish", type="primary"):
-    #                     result = manager.add_record_streamlit(
-    #                         file_content,
-    #                         uploaded_file.name,
-    #                         duplicate_action
-    #                     )
-    #
-    #                     if result["status"] == "added":
-    #                         st.success(result["message"])
-    #                         manager.save_main_database()
-    #                     elif result["status"] == "skipped":
-    #                         st.warning(result["message"])
-    #                     elif result["status"] == "updated":
-    #                         st.info(result["message"])
-    #                         manager.save_main_database()
-    #                     else:
-    #                         st.error(result["message"])
-    #
-    #                     # O'xshash yozuvlarni ko'rsatish
-    #                     if "similar_records" in result and result["similar_records"]:
-    #                         st.subheader("O'xshash yozuvlar topildi:")
-    #                         for i, (record_id, record, similarity) in enumerate(result["similar_records"]):
-    #                             with st.expander(f"O'xshashlik: {int(similarity * 100)}% - {record_id}"):
-    #                                 st.write(f"**Matn:** {record.get('text', '')}")
-    #                                 st.write(f"**Yaratilgan:** {record.get('created_at', 'N/A')}")
-    #                                 st.write(f"**Spiker ID:** {record.get('speaker_id', 'N/A')}")
-    #
-    #             except json.JSONDecodeError:
-    #                 st.error("JSON fayl formati noto'g'ri!")
-    #
-    #     with col2:
-    #         st.subheader("Bir nechta Fayl")
-    #
-    #         # Clear file uploader when files are processed
-    #         if st.session_state.files_processed:
-    #             st.session_state.files_processed = False
-    #             st.rerun()
-    #
-    #         uploaded_files = st.file_uploader(
-    #             "Bir nechta JSON fayl yuklang",
-    #             type=['json'],
-    #             accept_multiple_files=True,
-    #             key=f"multiple_files_{st.session_state.get('upload_key', 0)}"
-    #         )
-    #
-    #         if uploaded_files:
-    #             st.write(f"Tanlangan: {len(uploaded_files)} ta fayl")
-    #
-    #             batch_action = st.selectbox(
-    #                 "Batch ish uchun harakat",
-    #                 ["add_anyway", "skip", "update_existing"],
-    #                 format_func=lambda x: {
-    #                     "add_anyway": "Barchasini qo'shish",
-    #                     "skip": "Takrorlarni o'tkazish",
-    #                     "update_existing": "Takrorlarni yangilash"
-    #                 }[x],
-    #                 key="batch_action"
-    #             )
-    #
-    #             if st.button("Barcha Fayllarni Qayta Ishlash", type="primary"):
-    #                 progress_bar = st.progress(0)
-    #                 status_container = st.empty()
-    #                 results = {"added": 0, "skipped": 0, "updated": 0, "errors": 0, "details": []}
-    #
-    #                 for i, file in enumerate(uploaded_files):
-    #                     try:
-    #                         # Reset file pointer
-    #                         file.seek(0)
-    #                         file_content = json.loads(file.read())
-    #
-    #                         status_container.write(f"Qayta ishlanmoqda: {file.name}")
-    #
-    #                         result = manager.add_record_streamlit(
-    #                             file_content,
-    #                             file.name,
-    #                             batch_action
-    #                         )
-    #
-    #                         results["details"].append(result)
-    #                         results[result["status"]] += 1
-    #
-    #                         progress_bar.progress((i + 1) / len(uploaded_files))
-    #
-    #                     except json.JSONDecodeError:
-    #                         results["errors"] += 1
-    #                         results["details"].append({
-    #                             "status": "error",
-    #                             "filename": file.name,
-    #                             "message": "JSON format xatosi"
-    #                         })
-    #
-    #                 status_container.empty()
-    #
-    #                 # Natijalarni ko'rsatish
-    #                 col_a, col_b, col_c, col_d = st.columns(4)
-    #                 with col_a:
-    #                     st.metric("Qo'shildi", results["added"])
-    #                 with col_b:
-    #                     st.metric("Yangilandi", results["updated"])
-    #                 with col_c:
-    #                     st.metric("O'tkazildi", results["skipped"])
-    #                 with col_d:
-    #                     st.metric("Xatolar", results["errors"])
-    #
-    #                 manager.save_main_database()
-    #                 st.success("Batch qayta ishlash tugallandi!")
-    #
-    #                 # Mark files as processed and increment upload key
-    #                 st.session_state.files_processed = True
-    #                 st.session_state.upload_key = st.session_state.get('upload_key', 0) + 1
-
     # Manager obyektini yaratish
     if 'manager' not in st.session_state or st.session_state.manager.similarity_threshold != similarity_threshold:
         st.session_state.manager = SmartAudioDataManager(
@@ -689,75 +1132,22 @@ def main():
         st.session_state.processing_complete = False
 
     # Tab'larni yaratish
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📁 Fayl Qo'shish",
         "📊 Umumiy Statistika",
         "🔍 Takrorlar",
+        "🎵 Noyob Audio Fayllar",
         "💾 Ma'lumotlar"
     ])
 
     with tab1:
         st.header("Yangi Fayl Qo'shish")
 
-        col1, col2 = st.columns([1, 1])
+        # Tab ichida sub-tablar yaratish
+        subtab1, subtab2 = st.tabs(["📄 Alohida Fayllar", "📁 Butun Papka"])
 
-        with col1:
-            st.subheader("Bitta Fayl")
-            uploaded_file = st.file_uploader(
-                "JSON fayl yuklang",
-                type=['json'],
-                key="single_file"
-            )
-
-            if uploaded_file:
-                try:
-                    file_content = json.loads(uploaded_file.read())
-
-                    with st.expander("Fayl tarkibi"):
-                        st.json(file_content)
-
-                    duplicate_action = st.selectbox(
-                        "Takroriy fayllar uchun harakat",
-                        [ "skip", "add_anyway", "update_existing"],
-                        format_func=lambda x: {
-                            "skip": "O'tkazish",
-                            "add_anyway": "Qo'shish",
-                            "update_existing": "Yangilash"
-                        }[x]
-                    )
-
-                    if st.button("Faylni Qo'shish", type="primary"):
-                        result = manager.add_record_streamlit(
-                            file_content,
-                            uploaded_file.name,
-                            duplicate_action
-                        )
-
-                        if result["status"] == "added":
-                            st.success(result["message"])
-                            manager.save_main_database()
-                        elif result["status"] == "skipped":
-                            st.warning(result["message"])
-                        elif result["status"] == "updated":
-                            st.info(result["message"])
-                            manager.save_main_database()
-                        else:
-                            st.error(result["message"])
-
-                        # O'xshash yozuvlarni ko'rsatish
-                        if "similar_records" in result and result["similar_records"]:
-                            st.subheader("O'xshash yozuvlar topildi:")
-                            for i, (record_id, record, similarity) in enumerate(result["similar_records"]):
-                                with st.expander(f"O'xshashlik: {int(similarity * 100)}% - {record_id}"):
-                                    st.write(f"**Matn:** {record.get('text', '')}")
-                                    st.write(f"**Yaratilgan:** {record.get('created_at', 'N/A')}")
-                                    st.write(f"**Spiker ID:** {record.get('speaker_id', 'N/A')}")
-
-                except json.JSONDecodeError:
-                    st.error("JSON fayl formati noto'g'ri!")
-
-        with col2:
-            st.subheader("Bir nechta Fayl")
+        with subtab1:
+            st.subheader("Alohida JSON Fayllar")
 
             # Processing tugagandan keyin upload key'ni yangilash
             if st.session_state.processing_complete:
@@ -776,11 +1166,10 @@ def main():
 
                 batch_action = st.selectbox(
                     "Batch ish uchun harakat",
-                    [ "skip", "add_anyway", "update_existing"],
+                    ["skip", "update_existing"],
                     format_func=lambda x: {
-                        "add_anyway": "Barchasini qo'shish",
-                        "skip": "Takrorlarni o'tkazish",
-                        "update_existing": "Takrorlarni yangilash"
+                        "skip": "Takroriy matnni o'tkazib yuborish",
+                        "update_existing": "Takroriy matnni yangilash"
                     }[x],
                     key="batch_action"
                 )
@@ -793,17 +1182,18 @@ def main():
 
                         for i, file in enumerate(uploaded_files):
                             try:
-                                # Reset file pointer
                                 file.seek(0)
                                 file_content = json.loads(file.read())
 
                                 status_container.write(
                                     f"Qayta ishlanmoqda: {file.name} ({i + 1}/{len(uploaded_files)})")
 
+                                # Folder yo'lini "uploaded_files" qilib belgilash
                                 result = manager.add_record_streamlit(
                                     file_content,
                                     file.name,
-                                    batch_action
+                                    batch_action,
+                                    folder_path="uploaded_files"
                                 )
 
                                 results["details"].append(result)
@@ -816,17 +1206,18 @@ def main():
                                 results["details"].append({
                                     "status": "error",
                                     "filename": file.name,
-                                    "message": "JSON format xatosi"
+                                    "message": "JSON format xatosi",
+                                    "folder_path": "uploaded_files"
                                 })
                             except Exception as e:
                                 results["errors"] += 1
                                 results["details"].append({
                                     "status": "error",
                                     "filename": file.name,
-                                    "message": f"Xatolik: {str(e)}"
+                                    "message": f"Xatolik: {str(e)}",
+                                    "folder_path": "uploaded_files"
                                 })
 
-                        # Processing tugallangandan keyin
                         status_container.empty()
                         progress_bar.empty()
 
@@ -834,7 +1225,7 @@ def main():
                         st.subheader("Qayta Ishlash Natijalari")
                         col_a, col_b, col_c, col_d = st.columns(4)
                         with col_a:
-                            st.metric("✅ Qo'shildi", results["added"])
+                            st.metric("➕ Qo'shildi", results["added"])
                         with col_b:
                             st.metric("🔄 Yangilandi", results["updated"])
                         with col_c:
@@ -849,7 +1240,6 @@ def main():
                         except Exception as e:
                             st.error(f"❌ Ma'lumotlarni saqlashda xatolik: {str(e)}")
 
-                        # Processing tugallanganini belgilash
                         st.session_state.processing_complete = True
 
                         # Tafsilotlarni ko'rsatish
@@ -857,7 +1247,7 @@ def main():
                             with st.expander("Batafsil natijalar"):
                                 for detail in results["details"]:
                                     status_icon = {
-                                        "added": "✅",
+                                        "added": "➕",
                                         "updated": "🔄",
                                         "skipped": "⏭️",
                                         "error": "❌"
@@ -865,8 +1255,121 @@ def main():
 
                                     st.write(f"{status_icon} **{detail['filename']}**: {detail['message']}")
             else:
-                # Fayllar tanlanmagan holat
                 st.info("📁 Bir nechta JSON fayl tanlang")
+
+        with subtab2:
+            st.subheader("Butun Papkani Qayta Ishlash")
+
+            # Mavjud papkalarni ko'rsatish
+            available_folders = manager.get_available_source_folders()
+
+            if available_folders:
+                st.info(f"📁 {len(available_folders)} ta papka topildi")
+
+                selected_folder = st.selectbox(
+                    "Qayta ishlash uchun papkani tanlang:",
+                    available_folders,
+                    key="folder_selector"
+                )
+
+                # Tanlangan papka tarkibi
+                if selected_folder:
+                    folder_contents = manager.scan_folder_contents(selected_folder)
+
+                    if folder_contents["status"] == "success":
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("📄 JSON Fayllar", folder_contents['json_count'])
+                        with col2:
+                            st.metric("🎵 Audio Fayllar", folder_contents['audio_count'])
+                        with col3:
+                            st.metric("📊 Papka Hajmi", f"{folder_contents['folder_size_mb']:.1f} MB")
+
+                        # JSON fayllar ro'yxati
+                        if folder_contents['json_files']:
+                            with st.expander(f"📋 {len(folder_contents['json_files'])} ta JSON fayl"):
+                                json_df_data = []
+                                for json_file in folder_contents['json_files']:
+                                    json_df_data.append({
+                                        "Fayl nomi": json_file['name'],
+                                        "Hajm (KB)": json_file['size_kb']
+                                    })
+
+                                json_df = pd.DataFrame(json_df_data)
+                                st.dataframe(json_df, use_container_width=True)
+
+                folder_action = st.selectbox(
+                    "Papka uchun harakat:",
+                    ["skip", "update_existing"],
+                    format_func=lambda x: {
+                        "skip": "Takroriy matnlarni o'tkazib yuborish",
+                        "update_existing": "Takroriy matnlarni yangilash"
+                    }[x],
+                    key="folder_action"
+                )
+
+                if st.button("🚀 Butun Papkani Qayta Ishlash", type="primary", key="process_folder"):
+                    if selected_folder:
+                        with st.spinner(f"📁 {selected_folder} papkasidagi barcha JSON fayllar qayta ishlanmoqda..."):
+                            results = manager.process_folder_files(
+                                folder_path=selected_folder,
+                                action_on_duplicate=folder_action
+                            )
+
+                        if results["status"] == "success":
+                            st.success(f"✅ {selected_folder} papkasi muvaffaqiyatli qayta ishlandi!")
+
+                            # Natijalar
+                            col1, col2, col3, col4, col5 = st.columns(5)
+                            with col1:
+                                st.metric("📁 Jami Fayllar", results["total_files"])
+                            with col2:
+                                st.metric("➕ Qo'shildi", results["added"])
+                            with col3:
+                                st.metric("🔄 Yangilandi", results["updated"])
+                            with col4:
+                                st.metric("⏭️ O'tkazildi", results["skipped"])
+                            with col5:
+                                st.metric("❌ Xatolar", results["errors"])
+
+                            # Ma'lumotlar bazasini saqlash
+                            try:
+                                manager.save_main_database()
+                                st.success("💾 Ma'lumotlar bazasi saqlandi!")
+                            except Exception as e:
+                                st.error(f"❌ Saqlashda xatolik: {str(e)}")
+
+                            # Batafsil natijalar
+                            if results["details"]:
+                                with st.expander(f"📋 Batafsil natijalar ({len(results['details'])} ta fayl)"):
+                                    details_data = []
+                                    for detail in results["details"]:
+                                        status_text = {
+                                            "added": "Qo'shildi",
+                                            "updated": "Yangilandi",
+                                            "skipped": "O'tkazildi",
+                                            "error": "Xatolik"
+                                        }.get(detail["status"], "Noma'lum")
+
+                                        details_data.append({
+                                            "Fayl": detail["filename"],
+                                            "Holat": status_text,
+                                            "Xabar": detail.get("message", ""),
+                                        })
+
+                                    details_df = pd.DataFrame(details_data)
+                                    st.dataframe(details_df, use_container_width=True)
+
+                        elif results["status"] == "warning":
+                            st.warning(results["message"])
+                        else:
+                            st.error(results["message"])
+                    else:
+                        st.error("Iltimos, papkani tanlang!")
+
+            else:
+                st.warning("⚠️ Loyihada mos papkalar topilmadi!")
+                st.info("💡 JSON yoki audio fayllar mavjud papkalar qidiriladi.")
 
     with tab2:
         st.header("📊 Umumiy Statistika")
@@ -1132,6 +1635,228 @@ def main():
                 st.metric("Ma'lumot Sifati", "100%")
 
     with tab4:
+        st.header("🎵 Noyob Audio Fayllarni Yig'ish")
+
+        # Noyob matnlar haqida ma'lumot
+        unique_info = manager.get_unique_texts_info()
+
+        st.subheader("📊 Noyob Matnlar Statistikasi")
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Noyob Matnlar", unique_info["total_unique_texts"])
+        with col2:
+            if unique_info["total_size_mb"] >= 1:
+                st.metric("Umumiy Hajm", f"{unique_info['total_size_mb']:.2f} MB")
+            else:
+                st.metric("Umumiy Hajm", f"{unique_info['total_size_kb']:.2f} KB")
+        with col3:
+            st.metric("Kategoriyalar", len(unique_info["categories"]))
+        with col4:
+            st.metric("Speakerlar", len(unique_info["speakers"]))
+
+        if unique_info["total_unique_texts"] > 0:
+            # Papka bo'yicha ma'lumotlar
+            folder_groups = manager.get_records_by_folder()
+
+            st.subheader("📁 Papka Bo'yicha Ma'lumotlar")
+            folder_stats = []
+            for folder, records in folder_groups.items():
+                folder_stats.append({
+                    "Papka": folder,
+                    "Recordlar": len(records),
+                    "Noyob": len([r for r in unique_info["unique_records"]
+                                  if any(rec["record_id"] == r["record_id"] for rec in records)])
+                })
+
+            folder_df = pd.DataFrame(folder_stats)
+            st.dataframe(folder_df, use_container_width=True)
+
+            # Audio fayllarni yig'ish bo'limi
+            st.subheader("🎵 Aqlli Audio Fayllar Yig'ish")
+            st.info("💡 Har bir record uchun saqlangan papka yo'lidan audio fayl qidiriladi")
+
+            # Avtomatik destination papka nomi
+            auto_dest_name = manager.auto_create_destination_folder()
+
+            destination_folder = st.text_input(
+                "Maqsad papka nomi:",
+                value=auto_dest_name,
+                help="Noyob audio fayllar saqlanadigan yangi papka nomi"
+            )
+
+            file_extension = st.selectbox(
+                "Audio fayl turi:",
+                [".wav", ".mp3", ".m4a", ".flac"],
+                index=0
+            )
+
+            # Jarayon tugmasi
+            if st.button("🧠 Aqlli Usul Bilan Audio Fayllarni Yig'ish", type="primary"):
+                if not destination_folder.strip():
+                    st.error("Iltimos, maqsad papka nomini kiriting!")
+                else:
+                    full_destination_path = os.path.join(os.getcwd(), destination_folder.strip())
+
+                    with st.spinner("🔍 Recordlar uchun saqlangan papka yo'llaridan audio fayllar qidirilmoqda..."):
+                        results = manager.find_and_collect_unique_audio_files_smart(
+                            destination_folder=full_destination_path,
+                            file_extension=file_extension
+                        )
+
+                    if results["status"] == "success":
+                        st.success(f"✅ Aqlli jarayon tugallandi! {destination_folder} papkasi yaratildi.")
+
+                        # Natijalar
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Noyob Matnlar", results["total_unique_texts"])
+                        with col2:
+                            st.metric("Audio Topildi", results["audio_files_found"])
+                        with col3:
+                            st.metric("Nusxalandi", results["audio_files_copied"])
+                        with col4:
+                            missing_count = len(results["missing_audio_files"])
+                            st.metric("Topilmadi", missing_count)
+
+                        # Qayta ishlangan papkalar
+                        st.info(f"📁 Qayta ishlangan papkalar: {', '.join(results['folders_processed'])}")
+
+                        # Muvaffaqiyat darajasi
+                        success_rate = (results["audio_files_copied"] / results["total_unique_texts"]) * 100 if results[
+                                                                                                                    "total_unique_texts"] > 0 else 0
+                        st.progress(success_rate / 100)
+                        st.write(f"**Muvaffaqiyat darajasi:** {success_rate:.1f}%")
+
+                        # Nusxalangan fayllar
+                        if results["copied_files"]:
+                            with st.expander(f"✅ Nusxalangan {len(results['copied_files'])} ta Audio Fayl"):
+                                copied_data = []
+                                for file_info in results["copied_files"]:
+                                    copied_data.append({
+                                        "Audio Fayl": file_info["audio_file"],
+                                        "Record ID": file_info["record_id"],
+                                        "Manba Papka": file_info["source_folder"],
+                                        "Matn (qisqacha)": file_info["text_preview"]
+                                    })
+
+                                df_copied = pd.DataFrame(copied_data)
+                                st.dataframe(df_copied, use_container_width=True)
+
+                        # Topilmagan fayllar
+                        if results["missing_audio_files"]:
+                            with st.expander(f"❌ Topilmagan {len(results['missing_audio_files'])} ta Audio Fayl"):
+                                missing_data = []
+                                for missing_info in results["missing_audio_files"]:
+                                    missing_data.append({
+                                        "Kutilgan Audio Fayl": missing_info["expected_audio_file"],
+                                        "Record ID": missing_info["record_id"],
+                                        "Matn (qisqacha)": missing_info["text_preview"],
+                                        "Qidirilgan Joylar": missing_info.get("searched_folders", ["N/A"])
+                                    })
+
+                                df_missing = pd.DataFrame(missing_data)
+                                st.dataframe(df_missing, use_container_width=True)
+
+                        # Xatolar
+                        if results["errors"]:
+                            with st.expander("⚠️ Xatolar"):
+                                for error in results["errors"]:
+                                    st.error(f"**{error['audio_file']}**: {error['error']}")
+
+                        st.info(f"📂 Noyob audio fayllar: `{full_destination_path}`")
+
+                    elif results["status"] == "warning":
+                        st.warning(results["message"])
+                    else:
+                        st.error(results["message"])
+
+            # ... qolgan kod bir xil ...
+
+            else:
+                st.warning("⚠️ Loyihada hech qanday mos papka topilmadi!")
+                st.info("💡 JSON yoki audio fayllar mavjud bo'lgan papkalar qidirildi.")
+
+                # Manual input imkoniyati
+                with st.expander("📝 Qo'lda papka yo'lini kiritish"):
+                    manual_source = st.text_input(
+                        "Manba papka yo'li:",
+                        placeholder="masalan: papka1 yoki /to'liq/yo'l/papka",
+                        help="JSON va audio fayllar joylashgan papka yo'li"
+                    )
+
+                    manual_dest = st.text_input(
+                        "Maqsad papka nomi:",
+                        value="noyob_audio_fayllar_manual",
+                        help="Yangi yaratilacak papka nomi"
+                    )
+
+                    if st.button("🚀 Qo'lda Ko'rsatilgan Papka Bilan Ishlash"):
+                        if manual_source and manual_dest:
+                            with st.spinner("Jarayon amalga oshirilmoqda..."):
+                                results = manager.find_and_collect_unique_audio_files(
+                                    source_folder=manual_source,
+                                    destination_folder=manual_dest,
+                                    file_extension=file_extension
+                                )
+
+                            if results["status"] == "success":
+                                st.success("✅ Manual jarayon tugallandi!")
+                                # Results display code here...
+                            else:
+                                st.error(results.get("message", "Noma'lum xatolik"))
+                        else:
+                            st.error("Iltimos, har ikkala papka yo'lini kiriting!")
+
+            # Noyob matnlar jadvali
+            st.subheader("📋 Noyob Matnlar Ro'yxati")
+
+            if unique_info["unique_records"]:
+                unique_data = []
+                for record in unique_info["unique_records"]:
+                    size_display = f"{record['size_bytes'] / 1024:.2f} KB" if record[
+                                                                                  'size_bytes'] < 1024 * 1024 else f"{record['size_bytes'] / (1024 * 1024):.2f} MB"
+
+                    unique_data.append({
+                        "Record ID": record["record_id"],
+                        "Matn (qisqacha)": record["text_preview"],
+                        "Speaker": record["speaker_id"] or "N/A",
+                        "Kategoriya": record["category"] or "N/A",
+                        "Manba Fayl": record["source_file"] or "N/A",
+                        "Hajm": size_display
+                    })
+
+                df_unique = pd.DataFrame(unique_data)
+                st.dataframe(df_unique, use_container_width=True)
+
+                # CSV sifatida yuklab olish imkoniyati
+                csv_data = df_unique.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📄 Noyob matnlar ro'yxatini CSV sifatida yuklab olish",
+                    data=csv_data,
+                    file_name=f"noyob_matnlar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+
+            # Kategoriya bo'yicha tahlil
+            if unique_info["categories"]:
+                st.subheader("📊 Kategoriya bo'yicha Tahlil")
+                category_data = []
+                for category, count in unique_info["categories"].items():
+                    category_data.append({
+                        "Kategoriya": category,
+                        "Soni": count,
+                        "Foiz": f"{(count / unique_info['total_unique_texts'] * 100):.1f}%"
+                    })
+
+                df_categories = pd.DataFrame(category_data)
+                df_categories = df_categories.sort_values("Soni", ascending=False)
+                st.dataframe(df_categories, use_container_width=True)
+
+        else:
+            st.info("🔍 Hozircha noyob matnlar topilmadi. JSON fayllarni yuklang va takroriy matnlarni olib tashlang.")
+
+    with tab5:
         st.header("💾 Ma'lumotlar Boshqaruvi")
 
         # col1, col2 = st.columns(2)
